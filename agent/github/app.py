@@ -15,6 +15,10 @@ from agent.utils.http import DEFAULT_HTTP_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
+# Preserve the import-time values for backward-compatible tests/local overrides,
+# but fall back to the lazy ENV registry whenever they are empty. Managed
+# deployments can hydrate/rotate secrets after module import, and Open SWE's
+# central config contract requires those late values to be observed.
 GITHUB_APP_ID = ENV.GITHUB_APP_ID.get()
 GITHUB_APP_PRIVATE_KEY = ENV.GITHUB_APP_PRIVATE_KEY.get()
 GITHUB_APP_INSTALLATION_ID = ENV.GITHUB_APP_INSTALLATION_ID.get()
@@ -31,6 +35,18 @@ ScopeKey = tuple[str, tuple[int, ...], tuple[str, ...], PermissionKey]
 
 # scope key -> (token, expires_at, good_until). In-process only; never persisted.
 _TOKEN_CACHE: dict[ScopeKey, tuple[str, str | None, datetime]] = {}
+
+
+def _github_app_id() -> str:
+    return GITHUB_APP_ID or ENV.GITHUB_APP_ID.get()
+
+
+def _github_app_private_key() -> str:
+    return GITHUB_APP_PRIVATE_KEY or ENV.GITHUB_APP_PRIVATE_KEY.get()
+
+
+def _github_app_installation_id() -> str:
+    return GITHUB_APP_INSTALLATION_ID or ENV.GITHUB_APP_INSTALLATION_ID.get()
 
 
 def normalize_permissions(permissions: PermissionMap | None) -> PermissionKey:
@@ -90,15 +106,15 @@ def _generate_app_jwt() -> str:
     payload = {
         "iat": now - 60,  # issued 60s ago to account for clock skew
         "exp": now + 540,  # expires in 9 minutes (max is 10)
-        "iss": GITHUB_APP_ID,
+        "iss": _github_app_id(),
     }
-    private_key = GITHUB_APP_PRIVATE_KEY.replace("\\n", "\n")
+    private_key = _github_app_private_key().replace("\\n", "\n")
     return jwt.encode(payload, private_key, algorithm="RS256")
 
 
 async def get_github_app_installation_id_for_org(org: str) -> int | None:
     """Resolve the GitHub App installation for an organization."""
-    if not GITHUB_APP_ID or not GITHUB_APP_PRIVATE_KEY or not org.strip():
+    if not _github_app_id() or not _github_app_private_key() or not org.strip():
         return None
     try:
         async with httpx2.AsyncClient(timeout=DEFAULT_HTTP_TIMEOUT) as client:
@@ -120,7 +136,12 @@ async def get_github_app_installation_id_for_org(org: str) -> int | None:
 
 async def get_github_app_installation_id_for_repo(owner: str, repo: str) -> int | None:
     """Resolve the GitHub App installation that can access a repository."""
-    if not GITHUB_APP_ID or not GITHUB_APP_PRIVATE_KEY or not owner.strip() or not repo.strip():
+    if (
+        not _github_app_id()
+        or not _github_app_private_key()
+        or not owner.strip()
+        or not repo.strip()
+    ):
         return None
     url = (
         "https://api.github.com/repos/"
@@ -175,11 +196,11 @@ async def get_github_app_installation_token_with_expiry(
 ) -> tuple[str | None, str | None]:
     """Exchange the GitHub App JWT for an installation access token and its expiry."""
     resolved_installation_id = str(
-        GITHUB_APP_INSTALLATION_ID if installation_id is None else installation_id
+        _github_app_installation_id() if installation_id is None else installation_id
     ).strip()
     if (
-        not GITHUB_APP_ID
-        or not GITHUB_APP_PRIVATE_KEY
+        not _github_app_id()
+        or not _github_app_private_key()
         or not resolved_installation_id.isdigit()
         or int(resolved_installation_id) <= 0
     ):
