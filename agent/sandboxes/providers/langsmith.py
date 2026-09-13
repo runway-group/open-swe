@@ -57,10 +57,12 @@ def _get_langsmith_api_key() -> str | None:
     """
     return ENV.LANGSMITH_API_KEY.optional()
 
-
-def _get_sandbox_endpoint() -> str:
-    """Use the deployment's LangSmith API root for sandbox operations."""
-    return ENV.LANGSMITH_ENDPOINT.get()
+    def _get_sandbox_endpoint() -> str:
+    """Use the Open SWE override when set, otherwise the deployment LangSmith API root."""
+    return (
+        ENV.OPEN_SWE_LANGSMITH_ENDPOINT.optional()
+        or ENV.LANGSMITH_ENDPOINT.get()
+    )
 
 
 def _get_sandbox_api_endpoint() -> str:
