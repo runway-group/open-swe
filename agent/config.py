@@ -157,6 +157,11 @@ ENV.var(
     default="https://api.smith.langchain.com",
 )
 ENV.var(
+    "OPEN_SWE_LANGSMITH_ENDPOINT",
+    "Optional Open SWE-only LangSmith API endpoint override for managed deployments "
+    "where LANGSMITH_ENDPOINT is platform-reserved.",
+)
+ENV.var(
     "LANGSMITH_TENANT_ID",
     "LangSmith workspace id used in trace links; discovered from the workspace when unset.",
 )
